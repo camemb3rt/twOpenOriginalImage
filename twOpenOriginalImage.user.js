@@ -4,7 +4,7 @@
 // @namespace       http://furyu.hatenablog.com/
 // @author          furyu
 // @license         MIT
-// @version         0.1.22
+// @version         0.1.23
 // @include         http://twitter.com/*
 // @include         https://twitter.com/*
 // @include         https://x.com/*
@@ -23,15 +23,13 @@
 // @connect         twitter.com
 // @connect         x.com
 // @connect         twimg.com
-// @description     Open images in original size on Twitter.
+// @description     Open images in original size on Twitter/X and merge split images with the M shortcut.
 // @description:ja  Web版Twitter・TweetDeckで、原寸画像の表示と保存が簡単にできるようになります。
 // @homepageURL     https://github.com/Coxxs/twOpenOriginalImage/
 // @supportURL      https://github.com/Coxxs/twOpenOriginalImage/issues
 // @contributionURL https://memo.furyutei.com/about#send_donation
 // @compatible      chrome+tampermonkey
 // @compatible      firefox+violentmonkey
-// @downloadURL     https://github.com/Coxxs/twOpenOriginalImage/raw/main/twOpenOriginalImage.user.js
-// @updateURL       https://github.com/Coxxs/twOpenOriginalImage/raw/main/twOpenOriginalImage.user.js
 // ==/UserScript==
 
 /*
@@ -3012,7 +3010,7 @@ function initialize( user_options ) {
                     var download_link = create_download_link( img_url, target_document ),
                         download_link_container = import_node( download_link_container_template, target_document ),
                         mouse_click = object_extender( MouseClick ).init( download_link ),
-                        img_filename = ( OPTIONS.SAME_FILENAME_AS_IN_ZIP ) ? ( filename_prefix + '-img' + ( index + 1 ) + '.' + get_img_extension( img_url ) ) : download_link.download;
+                        img_filename = ( w.twOpenOriginalImageMergedFilenames && w.twOpenOriginalImageMergedFilenames[ img_url ] ) || ( ( OPTIONS.SAME_FILENAME_AS_IN_ZIP ) ? ( filename_prefix + '-img' + ( index + 1 ) + '.' + get_img_extension( img_url ) ) : download_link.download );
                     
                     download_link.href = img_url;
                     
@@ -3354,6 +3352,11 @@ function initialize( user_options ) {
             update_overlay_status( image_overlay_container.querySelector( '.image-link-container.start' ) );
             
             clear_node( image_overlay_shortcut_help );
+
+            var help_merge = import_node( help_item_template );
+            help_merge.classList.add( 'help-merge-images' );
+            help_merge.appendChild( d.createTextNode( '[m]merge' ) );
+            image_overlay_shortcut_help.appendChild( help_merge );
             
             if ( 1 < image_overlay_image_container.querySelectorAll( '.image-link-container' ).length ) {
                 var help_move_next = import_node( help_item_template ),
@@ -3816,6 +3819,15 @@ function initialize( user_options ) {
             image_overlay_drag_scroll.start();
             
         } // end of show_overlay()
+
+        w.twOpenOriginalImageShowMergedImage = function ( image_url, tweet, tweet_url, title ) {
+            if ( get_visible_overlay_container() ) {
+                close_overlay();
+            }
+            w.setTimeout( function () {
+                show_overlay( [ image_url ], tweet_url, title || OPTIONS.TITLE_PREFIX + 'Merged image', image_url, tweet, [ image_url ] );
+            }, 0 );
+        };
         
         
         function open_page( img_urls, tweet_url, title ) {
@@ -5790,3 +5802,128 @@ else {
 } )( window, document );
 
 // ■ end of file
+
+( function ( w, d ) {
+    'use strict';
+
+    const modes = [ 'horizontal', 'vertical', 'grid' ];
+    const modeLabels = { horizontal: 'Horizontal', vertical: 'Vertical', grid: '2 × 2 Grid' };
+    const lastModeByTweet = new Map();
+    const mergedFilenames = w.twOpenOriginalImageMergedFilenames || Object.create( null );
+    w.twOpenOriginalImageMergedFilenames = mergedFilenames;
+    let hoveredTweet = null;
+
+    function getGroups( tweet ) {
+        const groups = new Map();
+        tweet.querySelectorAll( 'a[href*="/photo/"]' ).forEach( ( link ) => {
+            const match = link.href.match( /(.+\/status\/\d+)\/photo\/(\d+)/ );
+            const image = link.querySelector( 'img' );
+            if ( !match || !image ) return;
+            if ( !groups.has( match[ 1 ] ) ) groups.set( match[ 1 ], new Map() );
+            groups.get( match[ 1 ] ).set( Number( match[ 2 ] ), image );
+        } );
+        return [ ...groups.entries() ].map( ( [ tweetUrl, images ] ) => ( {
+            tweetUrl,
+            images: [ ...images.entries() ].sort( ( a, b ) => a[ 0 ] - b[ 0 ] ).map( ( entry ) => entry[ 1 ] ),
+        } ) ).filter( ( group ) => group.images.length >= 2 );
+    }
+
+    function targetGroup() {
+        if ( hoveredTweet && d.contains( hoveredTweet ) ) {
+            const group = getGroups( hoveredTweet )[ 0 ];
+            if ( group ) return { tweet: hoveredTweet, group };
+        }
+        const middle = w.innerHeight / 2;
+        const candidates = [ ...d.querySelectorAll( 'article[role="article"]' ) ]
+            .map( ( tweet ) => ( { tweet, distance: Math.abs( tweet.getBoundingClientRect().top - middle ) } ) )
+            .sort( ( a, b ) => a.distance - b.distance );
+        for ( const candidate of candidates ) {
+            const group = getGroups( candidate.tweet )[ 0 ];
+            if ( group ) return { tweet: candidate.tweet, group };
+        }
+        return null;
+    }
+
+    function originalUrl( image ) {
+        const url = new URL( image.currentSrc || image.src, w.location.href );
+        url.searchParams.set( 'name', 'orig' );
+        return url.href;
+    }
+
+    function loadImage( url ) {
+        return new Promise( ( resolve, reject ) => {
+            const image = new Image();
+            image.crossOrigin = 'anonymous';
+            image.onload = () => resolve( image );
+            image.onerror = () => reject( new Error( `Could not load ${url}` ) );
+            image.src = url;
+        } );
+    }
+
+    async function merge( urls, mode ) {
+        const images = await Promise.all( urls.map( loadImage ) );
+        const canvas = d.createElement( 'canvas' );
+        const context = canvas.getContext( '2d' );
+        if ( mode === 'horizontal' ) {
+            canvas.width = images.reduce( ( total, image ) => total + image.naturalWidth, 0 );
+            canvas.height = Math.max( ...images.map( ( image ) => image.naturalHeight ) );
+            let x = 0;
+            images.forEach( ( image ) => { context.drawImage( image, x, 0 ); x += image.naturalWidth; } );
+        }
+        else if ( mode === 'grid' ) {
+            const left = Math.max( images[ 0 ].naturalWidth, images[ 2 ].naturalWidth );
+            const right = Math.max( images[ 1 ].naturalWidth, images[ 3 ].naturalWidth );
+            const top = Math.max( images[ 0 ].naturalHeight, images[ 1 ].naturalHeight );
+            const bottom = Math.max( images[ 2 ].naturalHeight, images[ 3 ].naturalHeight );
+            canvas.width = left + right;
+            canvas.height = top + bottom;
+            context.drawImage( images[ 0 ], 0, 0 );
+            context.drawImage( images[ 1 ], left, 0 );
+            context.drawImage( images[ 2 ], 0, top );
+            context.drawImage( images[ 3 ], left, top );
+        }
+        else {
+            canvas.width = Math.max( ...images.map( ( image ) => image.naturalWidth ) );
+            canvas.height = images.reduce( ( total, image ) => total + image.naturalHeight, 0 );
+            let y = 0;
+            images.forEach( ( image ) => { context.drawImage( image, 0, y ); y += image.naturalHeight; } );
+        }
+        return new Promise( ( resolve, reject ) => canvas.toBlob( ( blob ) => blob ? resolve( blob ) : reject( new Error( 'Could not encode merged image' ) ), 'image/png' ) );
+    }
+
+    function nextMode( group ) {
+        const previous = lastModeByTweet.get( group.tweetUrl );
+        let index = previous === undefined ? 0 : ( modes.indexOf( previous ) + 1 ) % modes.length;
+        while ( modes[ index ] === 'grid' && group.images.length !== 4 ) index = ( index + 1 ) % modes.length;
+        const mode = modes[ index ];
+        lastModeByTweet.set( group.tweetUrl, mode );
+        return mode;
+    }
+
+    d.addEventListener( 'mouseover', ( event ) => {
+        const tweet = event.target.closest && event.target.closest( 'article[role="article"]' );
+        if ( tweet ) hoveredTweet = tweet;
+    }, true );
+
+    d.addEventListener( 'keydown', async ( event ) => {
+        if ( event.key.toLowerCase() !== 'm' || event.ctrlKey || event.altKey || event.shiftKey || event.metaKey || event.repeat ) return;
+        const active = d.activeElement;
+        if ( active && ( active.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test( active.tagName ) ) ) return;
+        const target = targetGroup();
+        if ( !target || typeof w.twOpenOriginalImageShowMergedImage !== 'function' ) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const mode = nextMode( target.group );
+        try {
+            const blob = await merge( target.group.images.map( originalUrl ), mode );
+            const imageUrl = URL.createObjectURL( blob );
+            const filenameMatch = target.group.tweetUrl.match( /(?:twitter|x)\.com\/([^/]+)\/status\/(\d+)/ );
+            const filenamePrefix = filenameMatch ? `${filenameMatch[ 1 ]}-${filenameMatch[ 2 ]}` : 'images';
+            mergedFilenames[ imageUrl ] = `${filenamePrefix}-img1_${target.group.images.length}.png`;
+            w.twOpenOriginalImageShowMergedImage( imageUrl, target.tweet, target.group.tweetUrl, `Merged image — ${modeLabels[ mode ]}` );
+        }
+        catch ( error ) {
+            console.error( '[twOpenOriginalImage merger]', error );
+        }
+    }, true );
+} )( window, document );
