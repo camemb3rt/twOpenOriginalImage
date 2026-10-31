@@ -7,7 +7,9 @@
 2. Install userscript: [twOpenOriginalImage.user.js](https://github.com/Coxxs/twOpenOriginalImage/raw/main/twOpenOriginalImage.user.js)
 
 ## Version History
-
+### 0.1.23
+ - Added merge image (horizontal, vertical, grid) based on https://greasyfork.org/en/scripts/568182-twitter-x-split-image-merger by Spinfal
+   
 ### 0.1.22
 - Handle URLs like `/media/example.jpg?name=orig` correctly
 
