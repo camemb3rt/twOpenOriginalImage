@@ -25,8 +25,8 @@
 // @connect         twimg.com
 // @description     Open images in original size on Twitter/X and merge split images with the M shortcut.
 // @description:ja  Web版Twitter・TweetDeckで、原寸画像の表示と保存が簡単にできるようになります。
-// @homepageURL     https://github.com/Coxxs/twOpenOriginalImage/
-// @supportURL      https://github.com/Coxxs/twOpenOriginalImage/issues
+// @homepageURL     https://github.com/camemb3rt/twOpenOriginalImage/
+// @supportURL      https://github.com/camemb3rt/twOpenOriginalImage/issues
 // @contributionURL https://memo.furyutei.com/about#send_donation
 // @compatible      chrome+tampermonkey
 // @compatible      firefox+violentmonkey
