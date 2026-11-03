@@ -2,7 +2,7 @@
 // @name            twOpenOriginalImage
 // @name:ja         Twitter 原寸びゅー
 // @namespace       http://furyu.hatenablog.com/
-// @author          furyu
+// @author          Camembert
 // @license         MIT
 // @version         0.1.23
 // @include         http://twitter.com/*
@@ -5592,7 +5592,7 @@ async function init_gm_menu() {
                 header_link.id = `${config_id}_header-title-link`;
                 header_link.textContent = config_header.textContent;
                 header_link.target = '_blank';
-                header_link.href = GM_info.script.homepage || 'https://github.com/Coxxs/twOpenOriginalImage/';
+                header_link.href = GM_info.script.homepage || 'https://github.com/camemb3rt/twOpenOriginalImage/';
                 
                 donation_link.textContent = messages.DOMATION;
                 donation_link.id = `${config_id}_header-donation-link`;
