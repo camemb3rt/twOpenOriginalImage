@@ -28,6 +28,7 @@
 // @homepageURL     https://github.com/camemb3rt/twOpenOriginalImage/
 // @supportURL      https://github.com/camemb3rt/twOpenOriginalImage/issues
 // @updateURL       https://github.com/camemb3rt/twOpenOriginalImage/raw/main/twOpenOriginalImage.user.js
+// @downloadURL     https://github.com/camemb3rt/twOpenOriginalImage/raw/main/twOpenOriginalImage.user.js
 // @contributionURL https://memo.furyutei.com/about#send_donation
 // @compatible      chrome+tampermonkey
 // @compatible      firefox+violentmonkey
